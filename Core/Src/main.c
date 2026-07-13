@@ -70,21 +70,21 @@ void set_led(uint8_t state)
 		HAL_GPIO_WritePin(GPIOC, LED_Pin, GPIO_PIN_RESET);
 	}
 }
-void init_uart(void)
-{
-	 huart1.Instance = USART1;
-	 huart1.Init.BaudRate = 115200;
-	 huart1.Init.WordLength = UART_WORDLENGTH_8B;
-	 huart1.Init.StopBits = UART_STOPBITS_1;
-	 huart1.Init.Parity = UART_PARITY_NONE;
-	 huart1.Init.Mode = UART_MODE_TX_RX;
-	 huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	 huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-	 if (HAL_UART_Init(&huart1) != HAL_OK)
-	 {
-		 Error_Handler();
-	 }
-}
+//void init_uart(void)
+//{
+//	 huart1.Instance = USART1;
+//	 huart1.Init.BaudRate = 115200;
+//	 huart1.Init.WordLength = UART_WORDLENGTH_8B;
+//	 huart1.Init.StopBits = UART_STOPBITS_1;
+//	 huart1.Init.Parity = UART_PARITY_NONE;
+//	 huart1.Init.Mode = UART_MODE_TX_RX;
+//	 huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+//	 huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+//	 if (HAL_UART_Init(&huart1) != HAL_OK)
+//	 {
+//		 Error_Handler();
+//	 }
+//}
 void deinit_uart(void)
 {
 	HAL_UART_DeInit(&huart1);
@@ -98,7 +98,7 @@ void deinit_uart(void)
 
 }
 
-static void rtc_wakeup_timmer_settings(void)
+static void rtc_wakeup_timer_settings(void)
 {
 	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
 
@@ -115,12 +115,14 @@ static void enter_stop_mode(void)
 
 	HAL_SuspendTick();
 
+	HAL_PWREx_EnableFlashPowerDown();		// Power down flash memory when MCU is in STOM mode
+
 	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI );
 
 	SystemClock_Config();
 	HAL_ResumeTick();
 
-	init_uart();
+	MX_USART1_UART_Init();
 }
 
 /* USER CODE END 0 */
@@ -176,7 +178,7 @@ int main(void)
   while (1)
   {
 
-	  // Sleep MODE ////////////////////////////////////////////////////////////////////////
+	  // Sleep MODE. Power consumption 3mA  ////////////////////////////////////////////////////////////////////////
 //	  set_led(1);
 //
 //	  const char msg[] = "Run mode active\n\r";
@@ -191,12 +193,12 @@ int main(void)
 //	  }
 	  ////////////////////////////////////////////////////////////////////////////////////////
 
-	  // Stop mode /////////////////////////////////////////////////////////////////////////
+	  // Stop mode. Power consumption 48uA /////////////////////////////////////////////////////////////////////////
 	  static bool init = 0;
 	  if(init == 0)
 	  {
 		  init = 1;
-		  rtc_wakeup_timmer_settings();
+		  rtc_wakeup_timer_settings();
 	  }
 
 	  set_led(1);
@@ -207,7 +209,6 @@ int main(void)
 	  set_led(0);
 
 	  enter_stop_mode();
-
 	  ////////////////////////////////////////////////////////////////////////////////////////
 
 
