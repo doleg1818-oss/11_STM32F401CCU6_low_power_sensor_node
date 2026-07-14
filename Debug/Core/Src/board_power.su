@@ -1,0 +1,3 @@
+../Core/Src/board_power.c:17:13:uart_pins_set_analog	32	static
+../Core/Src/board_power.c:29:6:board_power_prepare_for_stop	8	static
+../Core/Src/board_power.c:35:6:board_power_prepare_after_stop	8	static

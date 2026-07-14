@@ -22,11 +22,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
+#include "power_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+static power_reset_source_t reset_source;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -60,27 +61,6 @@ static void MX_USART1_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-bool woke_from_standby = false;
-
-
-typedef enum
-{
-	WAKEUP_SOURCE_NONE = 0,
-	WAKEUP_SOURCE_RTC,
-	WAKEUP_SOURCE_BUTTON
-}wakeup_source_t;
-static volatile wakeup_source_t wakeup_source = WAKEUP_SOURCE_NONE;
-
-
-typedef enum
-{
-	RESET_SOURCE_POWER_ON = 0,
-	RESET_SOURCE_STENDBY_RTC,
-	RESET_SOURCE_STANDBY_BUTTON
-}reset_source_stendby_t;
-static reset_source_stendby_t reset_source_stendby = RESET_SOURCE_POWER_ON;
-
-
 void set_led(uint8_t state)
 {
 	if(state == 0)
@@ -91,90 +71,6 @@ void set_led(uint8_t state)
 	{
 		HAL_GPIO_WritePin(GPIOC, LED_Pin, GPIO_PIN_RESET);
 	}
-}
-
-void stanby_mode_check_interrupt_sourse(void)
-{
-	 __HAL_RCC_PWR_CLK_ENABLE();
-
-	 hrtc.Instance = RTC;
-
-	 if(__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET)
-	 {
-		 if(__HAL_RTC_WAKEUPTIMER_GET_FLAG(&hrtc, RTC_FLAG_WUTF) != RESET)
-		 {
-			 reset_source_stendby = RESET_SOURCE_STENDBY_RTC;
-		 }
-		 else
-		 {
-			 reset_source_stendby = RESET_SOURCE_STANDBY_BUTTON;
-		 }
-		  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
-		  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-	  }
-	 else
-	 {
-		 reset_source_stendby = RESET_SOURCE_POWER_ON;
-	 }
-}
-
-void deinit_uart(void)
-{
-	HAL_UART_DeInit(&huart1);
-
-	// Set UART pin as Analog GPIO
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-	GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10;
-	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-}
-
-static void rtc_wakeup_timer_settings(void)
-{
-	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-
-	if(HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 2048, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-	{
-		Error_Handler();
-	}
-}
-
-static void enter_stop_mode(void)
-{
-	// ALL UNUSED PINS HAS TOBE IN "ANALOG MODE" MODE Mo pull-downn and no pull up !!!!!!
-	// PA 0 HAS BE "GPIO EXTI0" Mode !!!!
-	deinit_uart();
-
-	HAL_SuspendTick();
-
-	HAL_PWREx_EnableFlashPowerDown();		// Power down flash memory when MCU is in STOM mode
-
-	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI );
-
-	SystemClock_Config();
-	HAL_ResumeTick();
-
-	MX_USART1_UART_Init();
-}
-static void enter_standby_mode(void)
-{
-	// ALL UNUSED PINS HAS TOBE IN "ANALOG MODE" MODE Mo pull-downn and no pull up!!!!!!
-	// PA 0 HAS BE "SYS WKUP" Mode !!!!
-	deinit_uart();
-	HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
-	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-	if(HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 18123, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)  // 10 sec
-	{
-		Error_Handler();
-	}
-//	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
-	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-
-	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
-	HAL_PWR_EnterSTANDBYMode();
-
 }
 
 /* USER CODE END 0 */
@@ -196,7 +92,8 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  stanby_mode_check_interrupt_sourse();
+  reset_source = power_manager_detect_reset_sourse(&hrtc);
+//  stanby_mode_check_interrupt_sourse();
 
 
   /* USER CODE END Init */
@@ -214,11 +111,21 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  power_manager_config_t power_config =
+  {
+		  .hrtc = &hrtc,
+		  .rtc_wakeup_counter = 18132U,
+		  .rtc_wakeup_clock = RTC_WAKEUPCLOCK_RTCCLK_DIV16,
+		  .wakeup_pin = PWR_WAKEUP_PIN1,
+		  .button_gpio_pin = GPIO_PIN_0
+  };
 
+  if(power_manager_init(&power_config) == false)
+  {
+	  Error_Handler();
+  }
 
-
-
-  //HAL_Delay(1000);
+  // Іефкегз идштл
   for(uint8_t i = 0; i<20; i++)
   {
 	  set_led(1);
@@ -235,79 +142,49 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+//	  // 1. Sleep mode 2.5 mA///////////////////////////////////////////////////////////////////////////////////////
+//	  power_manager_enter_sleep();
+//	  //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	  // Sleep MODE. Power consumption 3mA  ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-//	  set_led(1);
-//
-//	  const char msg[] = "Run mode active\n\r";
-//	  HAL_UART_Transmit(&huart1, (uint8_t *)msg, sizeof(msg)-1, HAL_MAX_DELAY);
-//	  HAL_Delay(100);
-//
-//	  set_led(0);
-//	  uint32_t stop_start = HAL_GetTick();
-//	  while((HAL_GetTick() - stop_start) < 900)
+	  // 3. Stendby mode 130 uA + RTC 10 sec, +wakeup button ////////////////////////////////////////////////////////
+//	  if(power_manager_configure_rtc_wakeup() == false)
 //	  {
-//		  enter_sleep_mode();
-//	  }
-	  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-	  // Stop mode. Power consumption 25uA. Wake up from RTC or button ///////////////////////////////////////////////////////////////////////////////
-//	  static bool init = 0;
-//	  if(init == 0)
-//	  {
-//		  init = 1;
-//		  rtc_wakeup_timer_settings();
+//		  Error_Handler();
 //	  }
 //
-//	  switch(wakeup_source)
+//	  while(1)
 //	  {
-//	  	  case WAKEUP_SOURCE_RTC:
-//	  	  {
-//	  		  char buff[50] = "Wake up from RTC\n\r";
-//	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
+//		  power_wakeup_source_t sourse = power_manager_get_wakeup_source();
+//		  if(sourse == POWER_WAKEUP_SOURCE_RTC)
+//		  {
+//			  char buff[50] = "Wakeup from RTC\n\r";
+//			  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
 //
-//	  		  set_led(1);
-//	  		  HAL_Delay(100);
-//	  		  set_led(0);
-//	  		  break;
-//	  	  }
+//			  set_led(1);
+//			  HAL_Delay(100);
+//			  set_led(0);
+//		  }
+//		  else if(sourse == POWER_WAKEUP_SOURCE_BUTTON)
+//		  {
+//			  char buff[50] = "Wake up from BUTTON\n\r";
+//			  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
 //
-//	  	  case WAKEUP_SOURCE_BUTTON:
-//	  	  {
-//	  		  char buff[50] = "Wake up from BUTTON\n\r";
-//	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
-//
-//	  		  for(uint8_t i = 0; i < 10; i++)
-//	  		  {
-//	  			  set_led(1);
-//	  			  HAL_Delay(50);
-//	  			  set_led(0);
-//	  			  HAL_Delay(50);
-//	  		  }
-//	  		  break;
-//	  	  }
-//
-//	  	  case WAKEUP_SOURCE_NONE:
-//	  	  {
-//	  		  char buff[50] = "System start..\n\r";
-//	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
-//
-//	  		  break;
-//	  	  }
+//			  for(uint8_t i = 0; i < 10; i++)
+//			  {
+//				  set_led(1);
+//				  HAL_Delay(50);
+//				  set_led(0);
+//				  HAL_Delay(50);
+//			  }
+//		  }
+//		  power_managere_clear_wakeup_source();
+//		  power_manager_enter_stop();
 //	  }
-//
-//	  wakeup_source = WAKEUP_SOURCE_NONE;
-//	  enter_stop_mode();
-	  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-	  // Standby mode. Power consumption 16 uA. Wake up from RTC or button //////////////////////////////////////////////////////////////////////////////
-
-	  switch(reset_source_stendby)
+	  // 3. Stendby mode 16.5uA + RTC 10 sec, +wakeup button ///////////////////////////////////////////////////////
+	  switch(reset_source)
 	  {
-	  	  case RESET_SOURCE_STENDBY_RTC:
+	  	  case POWER_RESET_SOURCE_STENDBY_RTC:
 	  	  {
 	  		  char buff[50] = "Wakeup from RTC\n\r";
 	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
@@ -315,34 +192,34 @@ int main(void)
 	  		  set_led(1);
 	  		  HAL_Delay(100);
 	  		  set_led(0);
+
 	  		  break;
 	  	  }
-	  	  case RESET_SOURCE_STANDBY_BUTTON:
-	  	  {
-			  char buff[50] = "Wakeup from BUTTON\n\r";
-			  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
 
-			  for(uint8_t i = 0; i < 10; i++)
-			  {
-				  set_led(1);
-				  HAL_Delay(50);
-				  set_led(0);
-				  HAL_Delay(50);
-			  }
+	  	  case POWER_RESET_SOURCE_STANDBY_BUTTON:
+	  	  {
+	  		  char buff[50] = "Wake up from BUTTON\n\r";
+	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
+
+	  		  for(uint8_t i = 0; i < 10; i++)
+	  		  {
+	  			  set_led(1);
+	  			  HAL_Delay(50);
+	  			  set_led(0);
+	  			  HAL_Delay(50);
+	  		  }
 	  		  break;
 	  	  }
-	  	  case RESET_SOURCE_POWER_ON:
+	  	  case POWER_RESET_SOURCE_POWER_ON:
+	  	  default:
 	  	  {
-	  		 char buff[50] = "Wakeup from reset\n\r";
-	  		 HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
-	  		 break;
+	  		  char buff[50] = "Wakeup from reset\n\r";
+	  		  HAL_UART_Transmit(&huart1,(uint8_t*) buff, strlen(buff), HAL_MAX_DELAY);
+	  		  break;
 	  	  }
-
 	  }
-	  enter_standby_mode();
-
-	  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+	  power_manager_enter_stenbby();
+	  //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -573,21 +450,21 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-{
-	if(hrtc->Instance == RTC)
-	{
-		wakeup_source = WAKEUP_SOURCE_RTC;
-	}
-
-}
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	if(GPIO_Pin == GPIO_PIN_0)
-	{
-		wakeup_source = WAKEUP_SOURCE_BUTTON;
-	}
-}
+//void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+//{
+//	if(hrtc->Instance == RTC)
+//	{
+//		wakeup_source = WAKEUP_SOURCE_RTC;
+//	}
+//
+//}
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+//{
+//	if(GPIO_Pin == GPIO_PIN_0)
+//	{
+//		wakeup_source = WAKEUP_SOURCE_BUTTON;
+//	}
+//}
 
 /* USER CODE END 4 */
 
