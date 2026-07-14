@@ -2,9 +2,9 @@
 ../Core/Src/power_manager.c:28:6:power_manager_configure_rtc_wakeup	8	static
 ../Core/Src/power_manager.c:44:6:power_manager_enter_sleep	8	static
 ../Core/Src/power_manager.c:48:6:power_manager_enter_stop	8	static
-../Core/Src/power_manager.c:64:6:power_manager_enter_stenbby	8	static
+../Core/Src/power_manager.c:64:6:power_manager_enter_standby	8	static
 ../Core/Src/power_manager.c:84:23:power_manager_get_wakeup_source	4	static
-../Core/Src/power_manager.c:88:6:power_managere_clear_wakeup_source	4	static
-../Core/Src/power_manager.c:92:22:power_manager_detect_reset_sourse	24	static
+../Core/Src/power_manager.c:88:6:power_manager_clear_wakeup_source	4	static
+../Core/Src/power_manager.c:92:22:power_manager_detect_reset_source	24	static
 ../Core/Src/power_manager.c:123:6:HAL_RTCEx_WakeUpTimerEventCallback	16	static
-../Core/Src/power_manager.c:131:6:HAL_GPIO_EXTI_Callback	16	static
+../Core/Src/power_manager.c:135:6:HAL_GPIO_EXTI_Callback	16	static

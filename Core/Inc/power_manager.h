@@ -23,7 +23,7 @@ typedef enum
 typedef enum
 {
 	POWER_RESET_SOURCE_POWER_ON = 0,
-	POWER_RESET_SOURCE_STENDBY_RTC,
+	POWER_RESET_SOURCE_STANDBY_RTC,
 	POWER_RESET_SOURCE_STANDBY_BUTTON
 }power_reset_source_t;
 
@@ -39,15 +39,15 @@ typedef struct
 }power_manager_config_t;
 
 bool power_manager_init(const power_manager_config_t *config);
-bool power_manager_configure_rtc_wokeup(void);
+bool power_manager_configure_rtc_wakeup(void);
 
 void power_manager_enter_sleep(void);
 void power_manager_enter_stop(void);
-void power_manager_enter_stenbby(void);
+void power_manager_enter_standby(void);
 
 power_wakeup_source_t power_manager_get_wakeup_source(void);
-void power_managere_clear_wakeup_source(void);
-power_reset_source_t power_manager_detect_reset_sourse(RTC_HandleTypeDef *hrtc);
+void power_manager_clear_wakeup_source(void);
+power_reset_source_t power_manager_detect_reset_source(RTC_HandleTypeDef *hrtc);
 
 
 #endif /* INC_POWER_MANAGER_H_ */
